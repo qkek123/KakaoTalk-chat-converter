@@ -1,39 +1,37 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <title>카카오톡 변환기</title>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      max-width: 900px;
-      margin: 40px auto;
-      padding: 0 20px;
-    }
-    textarea {
-      width: 100%;
-      height: 200px;
-      margin: 10px 0;
-      padding: 10px;
-      font-size: 14px;
-      box-sizing: border-box;
-      white-space: pre-wrap;
-    }
-    .options {
-      margin: 10px 0;
-    }
-    .options label {
-      margin-right: 15px;
-    }
-    .tabs button, button {
-      padding: 6px 12px;
-      margin-right: 5px;
-      cursor: pointer;
-    }
-    .section {
-      margin-top: 40px;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>카카오톡 변환기</title>
+<style>
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+textarea {
+  width: 100%;
+  height: 200px;
+  margin: 10px 0;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+button {
+  margin: 5px 5px 5px 0;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.tabs button {
+  padding: 6px 12px;
+}
+.options label {
+  margin-right: 15px;
+}
+.section {
+  margin-top: 40px;
+}
+</style>
 </head>
 <body>
 
@@ -42,49 +40,48 @@
 <h2>원본 카카오톡 채팅</h2>
 
 <div class="tabs">
-  <button onclick="selectInputType('download')">다운로드 데이터</button>
-  <button onclick="selectInputType('paste')">복붙 데이터</button>
+  <button onclick="selectInput('download')">다운로드 데이터</button>
+  <button onclick="selectInput('paste')">복붙 데이터</button>
 </div>
 
-<textarea id="downloadInput" placeholder="다운로드한 카카오톡 채팅을 붙여넣으세요"></textarea>
-<textarea id="pasteInput" placeholder="복붙한 카카오톡 채팅을 붙여넣으세요" style="display:none;"></textarea>
+<textarea id="downloadInput" placeholder="카카오톡 다운로드 데이터를 붙여넣으세요"></textarea>
+<textarea id="pasteInput" placeholder="카카오톡 복붙 데이터를 붙여넣으세요" style="display:none;"></textarea>
 
 <div class="section">
-  <h2>1. 카카오톡 → 노션</h2>
+<h2>1. 카카오톡 → 노션</h2>
 
-  <div class="options">
-    <label><input type="checkbox" id="notionSpeaker" checked> 화자 표시</label>
-    <label><input type="checkbox" id="notionDate"> 날짜 표시</label>
-    <label><input type="checkbox" id="notionTime"> 시간 표시</label>
-  </div>
+<div class="options">
+<label><input type="checkbox" id="notionSpeaker" checked> 화자 표시</label>
+<label><input type="checkbox" id="notionDate"> 날짜 표시</label>
+<label><input type="checkbox" id="notionTime"> 시간 표시</label>
+<label><input type="checkbox" id="notionDivider"> 화자 변경 시 구분선(---)</label>
+</div>
 
-  <button onclick="convertToNotion()">변환</button>
-  <button onclick="copyText('notionOutput')">결과 복사</button>
-  <textarea id="notionOutput"></textarea>
+<button onclick="convertToNotion()">변환</button>
+<button onclick="copyText('notionOutput')">자동 복사</button>
+<textarea id="notionOutput"></textarea>
 </div>
 
 <div class="section">
-  <h2>2. 카카오톡 → Roll20</h2>
+<h2>2. 카카오톡 → Roll20</h2>
 
-  <div class="options">
-    <label><input type="checkbox" id="roll20Date"> 날짜 표시 (/desc)</label>
-    <label><input type="checkbox" id="roll20Time"> 시간 표시</label>
-  </div>
+<div class="options">
+<label><input type="checkbox" id="roll20Date"> 날짜 표시 (/desc)</label>
+<label><input type="checkbox" id="roll20Time"> 시간 표시</label>
+</div>
 
-  <button onclick="convertToRoll20()">변환</button>
-  <button onclick="copyText('roll20Output')">결과 복사</button>
-  <textarea id="roll20Output"></textarea>
+<button onclick="convertToRoll20()">변환</button>
+<button onclick="copyText('roll20Output')">자동 복사</button>
+<textarea id="roll20Output"></textarea>
 </div>
 
 <script>
 let inputType = "download";
 
-function selectInputType(type) {
+function selectInput(type) {
   inputType = type;
-  document.getElementById("downloadInput").style.display =
-    type === "download" ? "block" : "none";
-  document.getElementById("pasteInput").style.display =
-    type === "paste" ? "block" : "none";
+  document.getElementById("downloadInput").style.display = type === "download" ? "block" : "none";
+  document.getElementById("pasteInput").style.display = type === "paste" ? "block" : "none";
 }
 
 function getInputText() {
@@ -93,61 +90,39 @@ function getInputText() {
     : document.getElementById("pasteInput").value;
 }
 
-/* 삭제된 메시지 처리 */
-function formatDeletedMessage(content) {
-  const trimmed = content.trim();
-  if (trimmed === "삭제된 메시지입니다.") {
-    return `*${trimmed}*`;
-  }
-  return content;
-}
-
-/* ✅ 최신 다운로드 데이터 파싱 */
-function parseDownloadedKakao(text) {
+/* 다운로드 데이터 파싱 (신 형식) */
+function parseDownload(text) {
   const lines = text.split("\n");
   const messages = [];
-
-  let current = null;
-  let currentDate = "";
-
-  const regex =
-    /^(\d{4}년 \d+월 \d+일) (오전|오후) (\d+:\d+), (.+?) : (.*)$/;
+  const regex = /^(\d{4}년 \d+월 \d+일) (오전|오후) (\d+:\d+), (.+?) : (.+)$/;
 
   for (const line of lines) {
-    const match = line.match(regex);
+    const m = line.match(regex);
+    if (!m) continue;
 
-    if (match) {
-      if (current) messages.push(current);
-
-      const date = match[1];
-      const time = `${match[2]} ${match[3]}`;
-
-      currentDate = date;
-
-      current = {
-        date: currentDate,
-        time: time,
-        speaker: match[4],
-        content: match[5]
-      };
-    } else if (current) {
-      current.content += "\n" + line;
+    let [, date, ampm, time, speaker, content] = m;
+    if (content === "삭제된 메시지입니다.") {
+      content = "*삭제된 메시지입니다.*";
     }
-  }
 
-  if (current) messages.push(current);
+    messages.push({
+      date,
+      time: `${ampm} ${time}`,
+      speaker,
+      content
+    });
+  }
   return messages;
 }
 
-/* 복붙 데이터 파싱 (기존 유지) */
-function parsePastedKakao(text) {
+/* 복붙 데이터 파싱 */
+function parsePaste(text) {
   const lines = text.split("\n");
   const messages = [];
   let currentDate = "";
-  let current = null;
 
-  const dateRegex = /^\d{4}년\s+\d+월\s+\d+일\s+.+$/;
-  const msgRegex = /^\[(.+?)\]\s+\[(.+?)\]\s+(.*)$/;
+  const dateRegex = /^\d{4}년.*요일$/;
+  const msgRegex = /^\[(.+?)\] \[(.+?)\] (.+)$/;
 
   for (const line of lines) {
     if (dateRegex.test(line)) {
@@ -155,99 +130,94 @@ function parsePastedKakao(text) {
       continue;
     }
 
-    const msgMatch = line.match(msgRegex);
-    if (msgMatch) {
-      if (current) messages.push(current);
-      current = {
-        date: currentDate,
-        speaker: msgMatch[1],
-        time: msgMatch[2],
-        content: msgMatch[3]
-      };
-    } else if (current && line.trim() !== "") {
-      current.content += "\n" + line;
-    }
-  }
+    const m = line.match(msgRegex);
+    if (!m) continue;
 
-  if (current) messages.push(current);
+    let [, speaker, time, content] = m;
+    if (content === "삭제된 메시지입니다.") {
+      content = "*삭제된 메시지입니다.*";
+    }
+
+    messages.push({
+      date: currentDate,
+      time,
+      speaker,
+      content
+    });
+  }
   return messages;
 }
 
 function getMessages() {
   const text = getInputText();
-  return inputType === "download"
-    ? parseDownloadedKakao(text)
-    : parsePastedKakao(text);
+  return inputType === "download" ? parseDownload(text) : parsePaste(text);
 }
 
 /* 노션 변환 */
 function convertToNotion() {
-  const showSpeaker = document.getElementById("notionSpeaker").checked;
-  const showDate = document.getElementById("notionDate").checked;
-  const showTime = document.getElementById("notionTime").checked;
+  const showSpeaker = notionSpeaker.checked;
+  const showDate = notionDate.checked;
+  const showTime = notionTime.checked;
+  const divider = notionDivider.checked;
 
   const messages = getMessages();
   let result = "";
   let prevSpeaker = null;
   let printedDate = "";
 
-  for (const msg of messages) {
-    if (showDate && msg.date !== printedDate) {
-      result += `\n====== ${msg.date} ======\n\n`;
-      printedDate = msg.date;
+  for (const m of messages) {
+    if (showDate && m.date !== printedDate) {
+      result += `\n====== ${m.date} ======\n\n`;
+      printedDate = m.date;
       prevSpeaker = null;
     }
 
-    if (msg.speaker !== prevSpeaker && result !== "") {
-      result += "\n";
+    if (prevSpeaker && m.speaker !== prevSpeaker) {
+      result += divider ? "\n---\n" : "\n";
     }
 
     const header = [];
-    if (showSpeaker) header.push(msg.speaker);
-    if (showTime) header.push(msg.time);
+    if (showSpeaker) header.push(m.speaker);
+    if (showTime) header.push(m.time);
 
-    if (header.length > 0) {
-      result += header.join(" ") + "\n";
-    }
+    if (header.length) result += header.join(" ") + "\n";
+    result += m.content + "\n";
 
-    result += formatDeletedMessage(msg.content) + "\n";
-    prevSpeaker = msg.speaker;
+    prevSpeaker = m.speaker;
   }
 
-  document.getElementById("notionOutput").value = result.trim();
+  notionOutput.value = result.trim();
 }
 
 /* Roll20 변환 */
 function convertToRoll20() {
-  const showDate = document.getElementById("roll20Date").checked;
-  const showTime = document.getElementById("roll20Time").checked;
+  const showDate = roll20Date.checked;
+  const showTime = roll20Time.checked;
 
   const messages = getMessages();
   let result = "";
   let printedDate = "";
 
-  for (const msg of messages) {
-    if (showDate && msg.date !== printedDate) {
-      result += `/desc ${msg.date}\n`;
-      printedDate = msg.date;
+  for (const m of messages) {
+    if (showDate && m.date !== printedDate) {
+      result += `/desc ${m.date}\n`;
+      printedDate = m.date;
     }
 
-    let line = `/as "${msg.speaker}" `;
-    if (showTime) line += `[${msg.time}] `;
-
-    line += formatDeletedMessage(msg.content).replace(/\n/g, " ");
+    let line = `/as "${m.speaker}" `;
+    if (showTime) line += `[${m.time}] `;
+    line += m.content.replace(/\n/g, " ");
     result += line + "\n";
   }
 
-  document.getElementById("roll20Output").value = result.trim();
+  roll20Output.value = result.trim();
 }
 
-/* 복사 */
 function copyText(id) {
-  const textarea = document.getElementById(id);
-  textarea.select();
+  const el = document.getElementById(id);
+  el.select();
   document.execCommand("copy");
-  alert("복사되었습니다!");
+  alert("복사되었습니다.");
 }
 </script>
 
