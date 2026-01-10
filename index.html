@@ -1,11 +1,165 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>내 첫 GitHub Pages</title>
+  <meta charset="UTF-8" />
+  <title>카카오톡 변환기</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    h1 { margin-bottom: 10px; }
+    textarea {
+      width: 100%;
+      height: 200px;
+      margin: 10px 0;
+      padding: 10px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    .options { margin: 10px 0; }
+    .options label { margin-right: 15px; }
+    button {
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .section { margin-top: 40px; }
+  </style>
 </head>
 <body>
-  <h1>성공입니다 🎉</h1>
-  <p>이 페이지가 보이면 GitHub Pages 설정이 된 겁니다.</p>
+
+<h1>카카오톡 변환기</h1>
+
+<h2>원본 카카오톡 채팅</h2>
+<textarea id="input" placeholder="카카오톡 채팅을 여기에 붙여넣으세요"></textarea>
+
+<div class="section">
+  <h2>1. 카카오톡 → 노션</h2>
+  <div class="options">
+    <label><input type="checkbox" id="notionSpeaker" checked> 화자 표시</label>
+    <label><input type="checkbox" id="notionDate"> 날짜 표시</label>
+    <label><input type="checkbox" id="notionTime"> 시간 표시</label>
+  </div>
+  <button onclick="convertToNotion()">변환</button>
+  <textarea id="notionOutput"></textarea>
+</div>
+
+<div class="section">
+  <h2>2. 카카오톡 → Roll20</h2>
+  <div class="options">
+    <label><input type="checkbox" id="roll20Date"> 날짜 표시 (/desc)</label>
+    <label><input type="checkbox" id="roll20Time"> 시간 표시</label>
+  </div>
+  <button onclick="convertToRoll20()">변환</button>
+  <textarea id="roll20Output"></textarea>
+</div>
+
+<script>
+function parseKakao(text) {
+  const lines = text.split("\n");
+  const messages = [];
+
+  let current = null;
+  let currentDate = null;
+
+  const messageRegex = /^\[(.+?)\]\s+\[(.+?)\]\s+(.*)$/;
+  const dateRegex = /(\d{4}년\s+\d+월\s+\d+일\s+\S+)/;
+
+  for (const line of lines) {
+    const dateMatch = line.match(dateRegex);
+    if (dateMatch) {
+      currentDate = dateMatch[1];
+      continue;
+    }
+
+    const match = line.match(messageRegex);
+    if (match) {
+      if (current) messages.push(current);
+
+      current = {
+        speaker: match[1],
+        time: match[2],
+        content: match[3],
+        date: currentDate
+      };
+    } else if (current) {
+      current.content += "\n" + line;
+    }
+  }
+
+  if (current) messages.push(current);
+  return messages;
+}
+
+function convertToNotion() {
+  const input = document.getElementById("input").value;
+  const showSpeaker = document.getElementById("notionSpeaker").checked;
+  const showDate = document.getElementById("notionDate").checked;
+  const showTime = document.getElementById("notionTime").checked;
+
+  const messages = parseKakao(input);
+  let result = "";
+
+  let prevSpeaker = null;
+  let prevDate = null;
+
+  for (const msg of messages) {
+    if (showDate && msg.date !== prevDate) {
+      if (result !== "") result += "\n\n";
+      result += `====== ${msg.date} ======\n\n`;
+      prevDate = msg.date;
+      prevSpeaker = null;
+    }
+
+    if (msg.speaker !== prevSpeaker && result !== "") {
+      result += "\n";
+    }
+
+    const header = [];
+    if (showSpeaker) header.push(msg.speaker);
+    if (showTime) header.push(msg.time);
+
+    if (header.length > 0) {
+      result += header.join(" ") + "\n";
+    }
+
+    result += msg.content + "\n";
+    prevSpeaker = msg.speaker;
+  }
+
+  document.getElementById("notionOutput").value = result.trim();
+}
+
+function convertToRoll20() {
+  const input = document.getElementById("input").value;
+  const showDate = document.getElementById("roll20Date").checked;
+  const showTime = document.getElementById("roll20Time").checked;
+
+  const messages = parseKakao(input);
+  let result = "";
+
+  let prevDate = null;
+
+  for (const msg of messages) {
+    if (showDate && msg.date !== prevDate) {
+      result += `/desc ${msg.date}\n`;
+      prevDate = msg.date;
+    }
+
+    let line = `/as "${msg.speaker}" `;
+    if (showTime) {
+      line += `[${msg.time}] `;
+    }
+    line += msg.content.replace(/\n/g, " ");
+    result += line + "\n";
+  }
+
+  document.getElementById("roll20Output").value = result.trim();
+}
+</script>
+
 </body>
 </html>
