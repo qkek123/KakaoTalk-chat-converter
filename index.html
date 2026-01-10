@@ -11,6 +11,7 @@ button { margin: 5px 5px 5px 0; padding: 6px 12px; cursor: pointer; }
 .options label { margin-right: 15px; }
 .section { margin-top: 40px; }
 .flex { display: flex; align-items: center; justify-content: space-between; }
+#copyToast { position: fixed; top: 20px; right: 20px; background: #4caf50; color: #fff; padding: 5px 10px; border-radius: 4px; opacity: 0; transition: opacity 0.5s; }
 </style>
 </head>
 <body>
@@ -38,7 +39,6 @@ button { margin: 5px 5px 5px 0; padding: 6px 12px; cursor: pointer; }
 </div>
 
 <div class="flex">
-<button onclick="convertToNotion()">변환</button>
 <div>
 페이지: <select id="notionPage" onchange="updateNotionPage()" style="display:none;"></select>
 <button onclick="copyText('notionOutput')">자동 복사</button>
@@ -57,10 +57,11 @@ button { margin: 5px 5px 5px 0; padding: 6px 12px; cursor: pointer; }
 <label><input type="checkbox" id="roll20Time"> 시간 표시</label>
 </div>
 
-<button onclick="convertToRoll20()">변환</button>
 <button onclick="copyText('roll20Output')">자동 복사</button>
 <textarea id="roll20Output" placeholder="Roll20용 결과"></textarea>
 </div>
+
+<div id="copyToast">복사되었습니다</div>
 
 <script>
 let inputType = "download";
@@ -69,7 +70,18 @@ function selectInput(type) {
   inputType = type;
   document.getElementById("downloadInput").style.display = type === "download" ? "block" : "none";
   document.getElementById("pasteInput").style.display = type === "paste" ? "block" : "none";
+  autoConvert();
 }
+
+// 입력값/체크박스 변경 시 자동 변환
+document.getElementById("downloadInput").addEventListener("input", autoConvert);
+document.getElementById("pasteInput").addEventListener("input", autoConvert);
+["notionSpeaker","notionDate","notionTime","notionDivider","notionPaging"].forEach(id=>{
+  document.getElementById(id).addEventListener("change", autoConvert);
+});
+["roll20Date","roll20Time"].forEach(id=>{
+  document.getElementById(id).addEventListener("change", autoConvert);
+});
 
 function getInputText() {
   return inputType === "download"
@@ -77,23 +89,21 @@ function getInputText() {
     : document.getElementById("pasteInput").value;
 }
 
-/* 다운로드 데이터 파싱 (신 형식, 다중 콜론 처리) */
+/* 다운로드 데이터 파싱 */
 function parseDownload(text) {
   const lines = text.split("\n");
   const messages = [];
   const regex = /^(\d{4}년 \d+월 \d+일) (오전|오후) (\d+:\d+), (.+?) : (.+)$/;
 
   let current = null;
-
   for (const line of lines) {
     const m = line.match(regex);
     if (m) {
-      if (current) messages.push(current); // 이전 메시지 저장
+      if (current) messages.push(current);
       let [, date, ampm, time, speaker, content] = m;
       if (content === "삭제된 메시지입니다.") content = "*삭제된 메시지입니다.*";
       current = { date, time:`${ampm} ${time}`, speaker, content };
     } else if (current) {
-      // 줄바꿈 포함된 추가 내용은 content에 붙이기
       current.content += "\n" + line;
     }
   }
@@ -106,7 +116,6 @@ function parsePaste(text) {
   const lines = text.split("\n");
   const messages = [];
   let currentDate = "";
-
   const dateRegex = /^\d{4}년.*요일$/;
   const msgRegex = /^\[(.+?)\] \[(.+?)\] (.+)$/;
 
@@ -129,7 +138,6 @@ function getMessages() {
 
 /* 노션 변환 */
 let notionPages = [];
-
 function convertToNotion() {
   const showSpeaker = notionSpeaker.checked;
   const showDate = notionDate.checked;
@@ -161,7 +169,6 @@ function convertToNotion() {
 
   document.getElementById("notionLength").textContent = result.length;
 
-  // 페이징 처리 5000자 단위
   if (paging) {
     notionPages = [];
     const chunkSize = 5000;
@@ -170,7 +177,7 @@ function convertToNotion() {
     }
     const pageSelect = document.getElementById("notionPage");
     pageSelect.innerHTML = "";
-    notionPages.forEach((p, i) => pageSelect.add(new Option(`${i+1}페이지`, i)));
+    notionPages.forEach((p,i)=>pageSelect.add(new Option(`${i+1}페이지`, i)));
     pageSelect.style.display = "inline-block";
     document.getElementById("notionOutput").value = notionPages[0];
   } else {
@@ -189,7 +196,6 @@ function updateNotionPage() {
 function convertToRoll20() {
   const showDate = roll20Date.checked;
   const showTime = roll20Time.checked;
-
   const messages = getMessages();
   let result = "";
   let printedDate = "";
@@ -207,14 +213,26 @@ function convertToRoll20() {
   document.getElementById("roll20Output").value = result.trim();
 }
 
-/* 자동 복사 */
+/* 자동 복사 표시 */
 function copyText(id) {
   const el = document.getElementById(id);
   el.select();
   document.execCommand("copy");
-  alert("복사되었습니다.");
+  const toast = document.getElementById("copyToast");
+  toast.style.opacity = 1;
+  setTimeout(()=>{toast.style.opacity=0;},1000);
 }
+
+/* 자동 변환 */
+function autoConvert() {
+  convertToNotion();
+  convertToRoll20();
+}
+
+// 초기 자동 변환
+autoConvert();
 </script>
 
+<div id="copyToast">복사되었습니다</div>
 </body>
 </html>
