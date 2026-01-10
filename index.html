@@ -60,7 +60,7 @@
 
   <button onclick="convertToNotion()">변환</button>
   <button onclick="copyText('notionOutput')">결과 복사</button>
-  <textarea id="notionOutput" placeholder="노션용 결과"></textarea>
+  <textarea id="notionOutput"></textarea>
 </div>
 
 <div class="section">
@@ -73,7 +73,7 @@
 
   <button onclick="convertToRoll20()">변환</button>
   <button onclick="copyText('roll20Output')">결과 복사</button>
-  <textarea id="roll20Output" placeholder="Roll20용 결과"></textarea>
+  <textarea id="roll20Output"></textarea>
 </div>
 
 <script>
@@ -102,31 +102,33 @@ function formatDeletedMessage(content) {
   return content;
 }
 
-/* 다운로드 데이터 파싱 */
+/* ✅ 최신 다운로드 데이터 파싱 */
 function parseDownloadedKakao(text) {
   const lines = text.split("\n");
   const messages = [];
-  let currentDate = "";
-  let current = null;
 
-  const dateRegex = /^-+\s*(.+?)\s*-+$/;
-  const msgRegex = /^\[(.+?)\]\s+\[(.+?)\]\s+(.*)$/;
+  let current = null;
+  let currentDate = "";
+
+  const regex =
+    /^(\d{4}년 \d+월 \d+일) (오전|오후) (\d+:\d+), (.+?) : (.*)$/;
 
   for (const line of lines) {
-    const dateMatch = line.match(dateRegex);
-    if (dateMatch) {
-      currentDate = dateMatch[1];
-      continue;
-    }
+    const match = line.match(regex);
 
-    const msgMatch = line.match(msgRegex);
-    if (msgMatch) {
+    if (match) {
       if (current) messages.push(current);
+
+      const date = match[1];
+      const time = `${match[2]} ${match[3]}`;
+
+      currentDate = date;
+
       current = {
         date: currentDate,
-        speaker: msgMatch[1],
-        time: msgMatch[2],
-        content: msgMatch[3]
+        time: time,
+        speaker: match[4],
+        content: match[5]
       };
     } else if (current) {
       current.content += "\n" + line;
@@ -137,7 +139,7 @@ function parseDownloadedKakao(text) {
   return messages;
 }
 
-/* 복붙 데이터 파싱 */
+/* 복붙 데이터 파싱 (기존 유지) */
 function parsePastedKakao(text) {
   const lines = text.split("\n");
   const messages = [];
@@ -190,7 +192,7 @@ function convertToNotion() {
   let printedDate = "";
 
   for (const msg of messages) {
-    if (showDate && msg.date && msg.date !== printedDate) {
+    if (showDate && msg.date !== printedDate) {
       result += `\n====== ${msg.date} ======\n\n`;
       printedDate = msg.date;
       prevSpeaker = null;
@@ -225,15 +227,13 @@ function convertToRoll20() {
   let printedDate = "";
 
   for (const msg of messages) {
-    if (showDate && msg.date && msg.date !== printedDate) {
+    if (showDate && msg.date !== printedDate) {
       result += `/desc ${msg.date}\n`;
       printedDate = msg.date;
     }
 
     let line = `/as "${msg.speaker}" `;
-    if (showTime) {
-      line += `[${msg.time}] `;
-    }
+    if (showTime) line += `[${msg.time}] `;
 
     line += formatDeletedMessage(msg.content).replace(/\n/g, " ");
     result += line + "\n";
@@ -242,7 +242,7 @@ function convertToRoll20() {
   document.getElementById("roll20Output").value = result.trim();
 }
 
-/* 자동 복사 */
+/* 복사 */
 function copyText(id) {
   const textarea = document.getElementById(id);
   textarea.select();
