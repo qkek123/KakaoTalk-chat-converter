@@ -10,9 +10,6 @@
       margin: 40px auto;
       padding: 0 20px;
     }
-    h1 {
-      margin-bottom: 10px;
-    }
     textarea {
       width: 100%;
       height: 200px;
@@ -28,7 +25,7 @@
     .options label {
       margin-right: 15px;
     }
-    .tabs button {
+    .tabs button, button {
       padding: 6px 12px;
       margin-right: 5px;
       cursor: pointer;
@@ -62,6 +59,7 @@
   </div>
 
   <button onclick="convertToNotion()">변환</button>
+  <button onclick="copyText('notionOutput')">결과 복사</button>
   <textarea id="notionOutput" placeholder="노션용 결과"></textarea>
 </div>
 
@@ -74,6 +72,7 @@
   </div>
 
   <button onclick="convertToRoll20()">변환</button>
+  <button onclick="copyText('roll20Output')">결과 복사</button>
   <textarea id="roll20Output" placeholder="Roll20용 결과"></textarea>
 </div>
 
@@ -92,6 +91,15 @@ function getInputText() {
   return inputType === "download"
     ? document.getElementById("downloadInput").value
     : document.getElementById("pasteInput").value;
+}
+
+/* 삭제된 메시지 처리 */
+function formatDeletedMessage(content) {
+  const trimmed = content.trim();
+  if (trimmed === "삭제된 메시지입니다.") {
+    return `*${trimmed}*`;
+  }
+  return content;
 }
 
 /* 다운로드 데이터 파싱 */
@@ -200,7 +208,7 @@ function convertToNotion() {
       result += header.join(" ") + "\n";
     }
 
-    result += msg.content + "\n";
+    result += formatDeletedMessage(msg.content) + "\n";
     prevSpeaker = msg.speaker;
   }
 
@@ -227,11 +235,19 @@ function convertToRoll20() {
       line += `[${msg.time}] `;
     }
 
-    line += msg.content.replace(/\n/g, " ");
+    line += formatDeletedMessage(msg.content).replace(/\n/g, " ");
     result += line + "\n";
   }
 
   document.getElementById("roll20Output").value = result.trim();
+}
+
+/* 자동 복사 */
+function copyText(id) {
+  const textarea = document.getElementById(id);
+  textarea.select();
+  document.execCommand("copy");
+  alert("복사되었습니다!");
 }
 </script>
 
