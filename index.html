@@ -4,33 +4,13 @@
 <meta charset="UTF-8">
 <title>카카오톡 변환기</title>
 <style>
-body {
-  font-family: system-ui, sans-serif;
-  max-width: 900px;
-  margin: 40px auto;
-  padding: 0 20px;
-}
-textarea {
-  width: 100%;
-  height: 200px;
-  margin: 10px 0;
-  padding: 10px;
-  white-space: pre-wrap;
-}
-button {
-  margin: 5px 5px 5px 0;
-  padding: 6px 12px;
-  cursor: pointer;
-}
-.tabs button {
-  padding: 6px 12px;
-}
-.options label {
-  margin-right: 15px;
-}
-.section {
-  margin-top: 40px;
-}
+body { font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+textarea { width: 100%; height: 200px; margin: 10px 0; padding: 10px; white-space: pre-wrap; }
+button { margin: 5px 5px 5px 0; padding: 6px 12px; cursor: pointer; }
+.tabs button { padding: 6px 12px; }
+.options label { margin-right: 15px; }
+.section { margin-top: 40px; }
+.flex { display: flex; align-items: center; justify-content: space-between; }
 </style>
 </head>
 <body>
@@ -55,11 +35,19 @@ button {
 <label><input type="checkbox" id="notionDate"> 날짜 표시</label>
 <label><input type="checkbox" id="notionTime"> 시간 표시</label>
 <label><input type="checkbox" id="notionDivider"> 화자 변경 시 구분선(---)</label>
+<label><input type="checkbox" id="notionPaging"> 5000자 단위 페이지 나누기</label>
 </div>
 
+<div class="flex">
 <button onclick="convertToNotion()">변환</button>
+<div>
+페이지: <select id="notionPage" onchange="updateNotionPage()" style="display:none;"></select>
 <button onclick="copyText('notionOutput')">자동 복사</button>
-<textarea id="notionOutput"></textarea>
+<span id="notionLength"></span>자
+</div>
+</div>
+
+<textarea id="notionOutput" placeholder="노션용 결과"></textarea>
 </div>
 
 <div class="section">
@@ -72,7 +60,7 @@ button {
 
 <button onclick="convertToRoll20()">변환</button>
 <button onclick="copyText('roll20Output')">자동 복사</button>
-<textarea id="roll20Output"></textarea>
+<textarea id="roll20Output" placeholder="Roll20용 결과"></textarea>
 </div>
 
 <script>
@@ -101,16 +89,9 @@ function parseDownload(text) {
     if (!m) continue;
 
     let [, date, ampm, time, speaker, content] = m;
-    if (content === "삭제된 메시지입니다.") {
-      content = "*삭제된 메시지입니다.*";
-    }
+    if (content === "삭제된 메시지입니다.") content = "*삭제된 메시지입니다.*";
 
-    messages.push({
-      date,
-      time: `${ampm} ${time}`,
-      speaker,
-      content
-    });
+    messages.push({date, time:`${ampm} ${time}`, speaker, content});
   }
   return messages;
 }
@@ -125,25 +106,13 @@ function parsePaste(text) {
   const msgRegex = /^\[(.+?)\] \[(.+?)\] (.+)$/;
 
   for (const line of lines) {
-    if (dateRegex.test(line)) {
-      currentDate = line.trim();
-      continue;
-    }
-
+    if (dateRegex.test(line)) { currentDate = line.trim(); continue; }
     const m = line.match(msgRegex);
-    if (!m) continue;
-
-    let [, speaker, time, content] = m;
-    if (content === "삭제된 메시지입니다.") {
-      content = "*삭제된 메시지입니다.*";
+    if (m) {
+      let [, speaker, time, content] = m;
+      if (content === "삭제된 메시지입니다.") content = "*삭제된 메시지입니다.*";
+      messages.push({date: currentDate, time, speaker, content});
     }
-
-    messages.push({
-      date: currentDate,
-      time,
-      speaker,
-      content
-    });
   }
   return messages;
 }
@@ -154,11 +123,14 @@ function getMessages() {
 }
 
 /* 노션 변환 */
+let notionPages = [];
+
 function convertToNotion() {
   const showSpeaker = notionSpeaker.checked;
   const showDate = notionDate.checked;
   const showTime = notionTime.checked;
   const divider = notionDivider.checked;
+  const paging = notionPaging.checked;
 
   const messages = getMessages();
   let result = "";
@@ -171,22 +143,41 @@ function convertToNotion() {
       printedDate = m.date;
       prevSpeaker = null;
     }
-
-    if (prevSpeaker && m.speaker !== prevSpeaker) {
-      result += divider ? "\n---\n" : "\n";
-    }
+    if (prevSpeaker && m.speaker !== prevSpeaker) result += divider ? "\n---\n" : "\n";
 
     const header = [];
     if (showSpeaker) header.push(m.speaker);
     if (showTime) header.push(m.time);
-
     if (header.length) result += header.join(" ") + "\n";
-    result += m.content + "\n";
 
+    result += m.content + "\n";
     prevSpeaker = m.speaker;
   }
 
-  notionOutput.value = result.trim();
+  document.getElementById("notionLength").textContent = result.length;
+
+  // 페이징 처리 5000자 단위
+  if (paging) {
+    notionPages = [];
+    const chunkSize = 5000;
+    for (let i = 0; i < result.length; i += chunkSize) {
+      notionPages.push(result.slice(i, i + chunkSize));
+    }
+    const pageSelect = document.getElementById("notionPage");
+    pageSelect.innerHTML = "";
+    notionPages.forEach((p, i) => pageSelect.add(new Option(`${i+1}페이지`, i)));
+    pageSelect.style.display = "inline-block";
+    document.getElementById("notionOutput").value = notionPages[0];
+  } else {
+    notionPages = [];
+    document.getElementById("notionPage").style.display = "none";
+    document.getElementById("notionOutput").value = result;
+  }
+}
+
+function updateNotionPage() {
+  const idx = document.getElementById("notionPage").value;
+  if (notionPages[idx]) document.getElementById("notionOutput").value = notionPages[idx];
 }
 
 /* Roll20 변환 */
@@ -203,16 +194,15 @@ function convertToRoll20() {
       result += `/desc ${m.date}\n`;
       printedDate = m.date;
     }
-
     let line = `/as "${m.speaker}" `;
     if (showTime) line += `[${m.time}] `;
-    line += m.content.replace(/\n/g, " ");
+    line += m.content.replace(/\n/g," ");
     result += line + "\n";
   }
-
-  roll20Output.value = result.trim();
+  document.getElementById("roll20Output").value = result.trim();
 }
 
+/* 자동 복사 */
 function copyText(id) {
   const el = document.getElementById(id);
   el.select();
