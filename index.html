@@ -5,12 +5,13 @@
 <title>카카오톡 변환기</title>
 <style>
 body { font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
-textarea { width: 100%; height: 200px; margin: 10px 0; padding: 10px; white-space: pre-wrap; }
+textarea { width: 100%; height: 200px; margin: 10px 0 4px; padding: 10px; white-space: pre-wrap; }
 button { margin: 5px 5px 5px 0; padding: 6px 12px; cursor: pointer; }
 .tabs button { padding: 6px 12px; }
 .options label { margin-right: 15px; }
 .section { margin-top: 40px; }
 .flex { display: flex; align-items: center; justify-content: space-between; }
+.length { font-size: 13px; color: #555; margin-bottom: 10px; }
 #copyToast { position: fixed; top: 20px; right: 20px; background: #4caf50; color: #fff; padding: 5px 10px; border-radius: 4px; opacity: 0; transition: opacity 0.5s; }
 </style>
 </head>
@@ -25,7 +26,10 @@ button { margin: 5px 5px 5px 0; padding: 6px 12px; cursor: pointer; }
 </div>
 
 <textarea id="downloadInput" placeholder="카카오톡 다운로드 데이터를 붙여넣으세요"></textarea>
+<div id="downloadLength" class="length">0자</div>
+
 <textarea id="pasteInput" placeholder="카카오톡 복붙 데이터를 붙여넣으세요" style="display:none;"></textarea>
+<div id="pasteLength" class="length" style="display:none;">0자</div>
 
 <div class="section">
 <h2>1. 카카오톡 → 노션</h2>
@@ -66,27 +70,40 @@ button { margin: 5px 5px 5px 0; padding: 6px 12px; cursor: pointer; }
 <script>
 let inputType = "download";
 
+/* 입력 선택 */
 function selectInput(type) {
   inputType = type;
-  document.getElementById("downloadInput").style.display = type === "download" ? "block" : "none";
-  document.getElementById("pasteInput").style.display = type === "paste" ? "block" : "none";
+  const isDownload = type === "download";
+
+  downloadInput.style.display = isDownload ? "block" : "none";
+  downloadLength.style.display = isDownload ? "block" : "none";
+
+  pasteInput.style.display = isDownload ? "none" : "block";
+  pasteLength.style.display = isDownload ? "none" : "block";
+
   autoConvert();
+  updateInputLength();
 }
 
-// 입력값/체크박스 변경 시 자동 변환
-document.getElementById("downloadInput").addEventListener("input", autoConvert);
-document.getElementById("pasteInput").addEventListener("input", autoConvert);
-["notionSpeaker","notionDate","notionTime","notionDivider","notionPaging"].forEach(id=>{
-  document.getElementById(id).addEventListener("change", autoConvert);
+/* 글자 수 */
+function updateInputLength() {
+  downloadLength.textContent = downloadInput.value.length + "자";
+  pasteLength.textContent = pasteInput.value.length + "자";
+}
+
+/* 입력 이벤트 */
+downloadInput.addEventListener("input", () => {
+  autoConvert();
+  updateInputLength();
 });
-["roll20Date","roll20Time"].forEach(id=>{
-  document.getElementById(id).addEventListener("change", autoConvert);
+pasteInput.addEventListener("input", () => {
+  autoConvert();
+  updateInputLength();
 });
 
+/* 입력값 */
 function getInputText() {
-  return inputType === "download"
-    ? document.getElementById("downloadInput").value
-    : document.getElementById("pasteInput").value;
+  return inputType === "download" ? downloadInput.value : pasteInput.value;
 }
 
 /* 다운로드 데이터 파싱 */
@@ -94,8 +111,8 @@ function parseDownload(text) {
   const lines = text.split("\n");
   const messages = [];
   const regex = /^(\d{4}년 \d+월 \d+일) (오전|오후) (\d+:\d+), (.+?) : (.+)$/;
-
   let current = null;
+
   for (const line of lines) {
     const m = line.match(regex);
     if (m) {
@@ -132,95 +149,86 @@ function parsePaste(text) {
 }
 
 function getMessages() {
-  const text = getInputText();
-  return inputType === "download" ? parseDownload(text) : parsePaste(text);
+  return inputType === "download"
+    ? parseDownload(downloadInput.value)
+    : parsePaste(pasteInput.value);
 }
 
 /* 노션 변환 */
 let notionPages = [];
 function convertToNotion() {
-  const showSpeaker = notionSpeaker.checked;
-  const showDate = notionDate.checked;
-  const showTime = notionTime.checked;
-  const divider = notionDivider.checked;
-  const paging = notionPaging.checked;
-
   const messages = getMessages();
   let result = "";
   let prevSpeaker = null;
   let printedDate = "";
 
   for (const m of messages) {
-    if (showDate && m.date !== printedDate) {
+    if (notionDate.checked && m.date !== printedDate) {
       result += `\n====== ${m.date} ======\n\n`;
       printedDate = m.date;
       prevSpeaker = null;
     }
-    if (prevSpeaker && m.speaker !== prevSpeaker) result += divider ? "\n---\n" : "\n";
+
+    if (prevSpeaker && m.speaker !== prevSpeaker)
+      result += notionDivider.checked ? "\n---\n" : "\n";
 
     const header = [];
-    if (showSpeaker) header.push(m.speaker);
-    if (showTime) header.push(m.time);
+    if (notionSpeaker.checked) header.push(m.speaker);
+    if (notionTime.checked) header.push(m.time);
     if (header.length) result += header.join(" ") + "\n";
 
     result += m.content + "\n";
     prevSpeaker = m.speaker;
   }
 
-  document.getElementById("notionLength").textContent = result.length;
+  notionLength.textContent = result.length;
 
-  if (paging) {
+  if (notionPaging.checked) {
     notionPages = [];
-    const chunkSize = 5000;
-    for (let i = 0; i < result.length; i += chunkSize) {
-      notionPages.push(result.slice(i, i + chunkSize));
-    }
-    const pageSelect = document.getElementById("notionPage");
-    pageSelect.innerHTML = "";
-    notionPages.forEach((p,i)=>pageSelect.add(new Option(`${i+1}페이지`, i)));
-    pageSelect.style.display = "inline-block";
-    document.getElementById("notionOutput").value = notionPages[0];
+    for (let i = 0; i < result.length; i += 5000)
+      notionPages.push(result.slice(i, i + 5000));
+
+    notionPage.innerHTML = "";
+    notionPages.forEach((_, i) => notionPage.add(new Option(`${i+1}페이지`, i)));
+    notionPage.style.display = "inline-block";
+    notionOutput.value = notionPages[0];
   } else {
     notionPages = [];
-    document.getElementById("notionPage").style.display = "none";
-    document.getElementById("notionOutput").value = result;
+    notionPage.style.display = "none";
+    notionOutput.value = result;
   }
 }
 
 function updateNotionPage() {
-  const idx = document.getElementById("notionPage").value;
-  if (notionPages[idx]) document.getElementById("notionOutput").value = notionPages[idx];
+  notionOutput.value = notionPages[notionPage.value] || "";
 }
 
 /* Roll20 변환 */
 function convertToRoll20() {
-  const showDate = roll20Date.checked;
-  const showTime = roll20Time.checked;
   const messages = getMessages();
   let result = "";
   let printedDate = "";
 
   for (const m of messages) {
-    if (showDate && m.date !== printedDate) {
+    if (roll20Date.checked && m.date !== printedDate) {
       result += `/desc ${m.date}\n`;
       printedDate = m.date;
     }
     let line = `/as "${m.speaker}" `;
-    if (showTime) line += `[${m.time}] `;
-    line += m.content.replace(/\n/g," ");
+    if (roll20Time.checked) line += `[${m.time}] `;
+    line += m.content.replace(/\n/g, " ");
     result += line + "\n";
   }
-  document.getElementById("roll20Output").value = result.trim();
+  roll20Output.value = result.trim();
 }
 
-/* 자동 복사 표시 */
+/* 복사 */
 function copyText(id) {
   const el = document.getElementById(id);
   el.select();
   document.execCommand("copy");
-  const toast = document.getElementById("copyToast");
-  toast.style.opacity = 1;
-  setTimeout(()=>{toast.style.opacity=0;},1000);
+  copyToast.style.opacity = 1;
+  setTimeout(() => copyToast.style.opacity = 0, 1000);
 }
 
 /* 자동 변환 */
@@ -229,10 +237,10 @@ function autoConvert() {
   convertToRoll20();
 }
 
-// 초기 자동 변환
+/* 초기 */
 autoConvert();
+updateInputLength();
 </script>
 
-<div id="copyToast">복사되었습니다</div>
 </body>
 </html>
